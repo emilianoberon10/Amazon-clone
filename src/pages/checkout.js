@@ -1,3 +1,4 @@
+/* global alert */
 import { useSelector } from 'react-redux'
 import Image from 'next/image'
 
@@ -6,11 +7,29 @@ import Header from '../components/Header'
 import { selectItems, selectTotal } from '../slices/basketSlice'
 import Currency from 'react-currency-formatter'
 import { useSession } from 'next-auth/client'
+import { loadStripe } from '@stripe/stripe-js'
+import axios from 'axios'
+
+const stripePromise = loadStripe(process.env.stripe_public_key)
 
 const checkout = () => {
   const items = useSelector(selectItems)
   const total = useSelector(selectTotal)
   const [session] = useSession()
+  const createCheckoutSession = async () => {
+    const stripe = await stripePromise
+    // Call the backend to create a checkout session..
+    const checkoutSession = await axios.post('/api/createCheckoutSession',
+      {
+        items: items,
+        email: session.user.email
+      })
+    // Redirect user to checkout page
+    const result = await stripe.redirectToCheckout({
+      sessionId: checkoutSession.data.id
+    })
+    if (result.error) alert(result.error.message)
+  }
   return (
     <div className='bg-gray-100'>
       <Header />
@@ -30,9 +49,9 @@ const checkout = () => {
                 : `Shopping Basket (${items.length})`}
             </h1>
 
-            {items.map((item) => (
+            {items.map((item, i) => (
               <CheckOutProduct
-                key={item.id}
+                key={i}
                 id={item.id}
                 title={item.title}
                 price={item.price}
@@ -55,7 +74,12 @@ const checkout = () => {
                   <Currency quantity={total} />
                 </span>
               </h2>
-              <button disabled={!session} className={`button mt-2 ${!session && 'from-gray-300 to-gray-500 border-gray-200 text-gray-300 cursor-not-allowed'}`}>
+              <button
+                role='link'
+                onClick={createCheckoutSession}
+                disabled={!session}
+                className={`button mt-2 ${!session && 'from-gray-300 to-gray-500 border-gray-200 text-gray-300 cursor-not-allowed'}`}
+              >
                 {!session ? 'Sign in to checkout' : 'Proceed to checkout'}
               </button>
             </>
